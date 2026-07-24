@@ -33,6 +33,7 @@ final class PM2Model: NSObject {
 
     var onUpdate: (() -> Void)?
     private var timer: Timer?
+    private var isFetching = false
     private let pm2Path: String
 
     override init() {
@@ -47,7 +48,14 @@ final class PM2Model: NSObject {
 
         fetch()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.fetch()
+            guard let self = self, !self.isFetching else { return }
+            self.isFetching = true
+            DispatchQueue.global().async { [weak self] in
+                self?.fetch()
+                DispatchQueue.main.async {
+                    self?.isFetching = false
+                }
+            }
         }
     }
 

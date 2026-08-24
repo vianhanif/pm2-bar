@@ -63,6 +63,7 @@ swift run
 swift build -c release
 
 # Install to ~/Applications/
+mkdir -p ~/Applications/PM2Bar.app/Contents/MacOS
 cp .build/release/PM2Bar ~/Applications/PM2Bar.app/Contents/MacOS/PM2Bar
 codesign -s - -f ~/Applications/PM2Bar.app
 

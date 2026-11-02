@@ -38,6 +38,7 @@ final class PM2Model: NSObject {
 
     override init() {
         let candidates = [
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/pm2").path,
             (FileManager.default.homeDirectoryForCurrentUser.path() + "/.asdf/shims/pm2"),
             "/usr/local/bin/pm2",
             "/opt/homebrew/bin/pm2",
@@ -92,10 +93,17 @@ final class PM2Model: NSObject {
         guard let headerIdx = lines.firstIndex(where: { $0.contains("id") && $0.contains("name") }) else {
             DispatchQueue.main.async { [weak self] in
                 self?.errorMessage = "pm2 not found"
+                self?.processes = []
                 self?.onUpdate?()
             }
             return
         }
+
+        let headerCols = lines[headerIdx]
+            .trimmingCharacters(in: CharacterSet(charactersIn: "│ "))
+            .split(separator: "│")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        let statusIdx = headerCols.firstIndex(of: "status") ?? 8
 
         let bodyStart = headerIdx + 2
         guard bodyStart < lines.count else {
@@ -114,7 +122,7 @@ final class PM2Model: NSObject {
 
         var parsed: [PM2Process] = []
         for line in bodyLines {
-            if let proc = parseLine(String(line)) {
+            if let proc = parseLine(String(line), statusIdx: statusIdx) {
                 parsed.append(proc)
             }
         }
@@ -127,7 +135,7 @@ final class PM2Model: NSObject {
         }
     }
 
-    private func parseLine(_ line: String) -> PM2Process? {
+    private func parseLine(_ line: String, statusIdx: Int) -> PM2Process? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
 
@@ -136,9 +144,7 @@ final class PM2Model: NSObject {
             .split(separator: "│")
             .map { $0.trimmingCharacters(in: .whitespaces) }
 
-        guard let statusIdx = rawCols.firstIndex(where: {
-            ["online", "errored", "stopped", "paused"].contains($0.lowercased())
-        }) else { return nil }
+        guard rawCols.count > statusIdx else { return nil }
 
         let pidIdx = statusIdx - 3
         let uptimeIdx = statusIdx - 2
@@ -188,7 +194,7 @@ final class PM2MenuBarDelegate: NSObject, NSMenuDelegate {
 
     func updateButtonTitle() {
         guard let button = statusItem.button else { return }
-        let count = model.processes.count
+        let count = model.processes.lazy.filter { $0.status == "online" }.count
         let imageName = model.hasErrors ? "exclamationmark.triangle.fill" : "terminal.fill"
 
         if let image = NSImage(systemSymbolName: imageName, accessibilityDescription: nil) {
